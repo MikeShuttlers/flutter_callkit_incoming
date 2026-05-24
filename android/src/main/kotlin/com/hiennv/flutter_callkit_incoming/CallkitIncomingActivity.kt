@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -16,9 +17,11 @@ import android.view.View
 import android.view.Window
 import android.view.WindowManager
 import android.view.animation.AnimationUtils
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.fragment.app.FragmentActivity
 import com.hiennv.flutter_callkit_incoming.widgets.RippleRelativeLayout
 import de.hdodenhof.circleimageview.CircleImageView
 import kotlin.math.abs
@@ -26,8 +29,16 @@ import android.view.ViewGroup.MarginLayoutParams
 import android.os.PowerManager
 import android.text.TextUtils
 import android.util.Log
+import io.flutter.FlutterInjector
+import io.flutter.embedding.android.FlutterFragment
+import io.flutter.embedding.android.RenderMode
+import io.flutter.embedding.android.TransparencyMode
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
+import io.flutter.embedding.engine.dart.DartExecutor
+import org.json.JSONObject
 
-class CallkitIncomingActivity : Activity() {
+class CallkitIncomingActivity : FragmentActivity() {
 
     companion object {
 
@@ -70,6 +81,8 @@ class CallkitIncomingActivity : Activity() {
     private lateinit var tvNumber: TextView
     private lateinit var ivLogo: ImageView
     private lateinit var ivAvatar: CircleImageView
+    private lateinit var llCallerInfo: LinearLayout
+    private lateinit var flCustomFlutterSection: FrameLayout
 
     private lateinit var llAction: LinearLayout
     private lateinit var ivAcceptCall: ImageView
@@ -77,6 +90,9 @@ class CallkitIncomingActivity : Activity() {
 
     private lateinit var ivDeclineCall: ImageView
     private lateinit var tvDecline: TextView
+
+    private var customFlutterEngine: FlutterEngine? = null
+    private var customFlutterEngineId: String? = null
 
     @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -249,6 +265,84 @@ class CallkitIncomingActivity : Activity() {
                 data?.getSerializable(CallkitConstants.EXTRA_CALLKIT_HEADERS) as HashMap<String, Any?>
             ImageLoaderProvider.loadImage(this@CallkitIncomingActivity, backgroundUrl, headers, R.drawable.transparent, ivBackground)
         }
+
+        maybeRenderCustomFlutterSection(data)
+    }
+
+    private fun maybeRenderCustomFlutterSection(data: Bundle?) {
+        val route = data?.getString(
+            CallkitConstants.EXTRA_CALLKIT_INCOMING_CUSTOM_WIDGET_ROUTE,
+            ""
+        ).orEmpty()
+        if (route.isEmpty()) {
+            flCustomFlutterSection.visibility = View.GONE
+            return
+        }
+
+        try {
+            val appContext = applicationContext
+            val flutterLoader = FlutterInjector.instance().flutterLoader()
+            flutterLoader.startInitialization(appContext)
+            flutterLoader.ensureInitializationComplete(appContext, null)
+
+            val payload = buildCustomFlutterPayload(data)
+            val encodedPayload = Uri.encode(JSONObject(payload as Map<*, *>).toString())
+            val routeWithPayload =
+                if (route.contains("?")) "$route&callkitData=$encodedPayload" else "$route?callkitData=$encodedPayload"
+
+            val engine = FlutterEngine(appContext)
+            engine.navigationChannel.setInitialRoute(routeWithPayload)
+            engine.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault())
+
+            val callId = data?.getString(
+                CallkitConstants.EXTRA_CALLKIT_ID,
+                System.currentTimeMillis().toString()
+            ) ?: System.currentTimeMillis().toString()
+            val engineId = "callkit_fullscreen_$callId"
+            // Remove any stale cached engine from a previous call with the same ID
+            FlutterEngineCache.getInstance().remove(engineId)
+            FlutterEngineCache.getInstance().put(engineId, engine)
+
+            val flutterFragment = FlutterFragment.withCachedEngine(engineId)
+                .renderMode(RenderMode.texture)
+                .transparencyMode(TransparencyMode.transparent)
+                .shouldAttachEngineToActivity(false)
+                .build<FlutterFragment>()
+
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.flCustomFlutterSection, flutterFragment, "callkit_custom_flutter_section")
+                .commitNowAllowingStateLoss()
+
+            val attachedFragment =
+                supportFragmentManager.findFragmentByTag("callkit_custom_flutter_section")
+            if (attachedFragment == null) {
+                throw IllegalStateException("Custom Flutter header fragment did not attach")
+            }
+
+            customFlutterEngine = engine
+            customFlutterEngineId = engineId
+
+            ivLogo.visibility = View.GONE
+            ivAvatar.visibility = View.GONE
+            llCallerInfo.visibility = View.GONE
+            flCustomFlutterSection.visibility = View.VISIBLE
+        } catch (error: Exception) {
+            Log.e("CallkitIncomingActivity", "Unable to render custom Flutter section", error)
+            flCustomFlutterSection.visibility = View.GONE
+        }
+    }
+
+    private fun buildCustomFlutterPayload(data: Bundle?): HashMap<String, Any?> {
+        val payload = HashMap<String, Any?>()
+        payload["id"] = data?.getString(CallkitConstants.EXTRA_CALLKIT_ID, "")
+        payload["nameCaller"] = data?.getString(CallkitConstants.EXTRA_CALLKIT_NAME_CALLER, "")
+        payload["handle"] = data?.getString(CallkitConstants.EXTRA_CALLKIT_HANDLE, "")
+        payload["type"] = data?.getInt(CallkitConstants.EXTRA_CALLKIT_TYPE, 0)
+        payload["avatar"] = data?.getString(CallkitConstants.EXTRA_CALLKIT_AVATAR, "")
+        payload["extra"] = data?.getSerializable(CallkitConstants.EXTRA_CALLKIT_EXTRA)
+        val customData = data?.getSerializable(CallkitConstants.EXTRA_CALLKIT_INCOMING_CUSTOM_WIDGET_DATA)
+        payload["custom"] = if (customData is HashMap<*, *>) customData else HashMap<String, Any?>()
+        return payload
     }
 
     private fun finishTimeout(data: Bundle?, duration: Long) {
@@ -276,6 +370,8 @@ class CallkitIncomingActivity : Activity() {
         tvNumber = findViewById(R.id.tvNumber)
         ivLogo = findViewById(R.id.ivLogo)
         ivAvatar = findViewById(R.id.ivAvatar)
+        llCallerInfo = findViewById(R.id.llCallerInfo)
+        flCustomFlutterSection = findViewById(R.id.flCustomFlutterSection)
 
         llAction = findViewById(R.id.llAction)
 
@@ -356,7 +452,26 @@ class CallkitIncomingActivity : Activity() {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(endedCallkitIncomingBroadcastReceiver)
+        // Detach Flutter fragment before destroying engine to avoid JNI crash.
+        try {
+            val frag = supportFragmentManager.findFragmentByTag("callkit_custom_flutter_section")
+            if (frag != null) {
+                supportFragmentManager.beginTransaction()
+                    .remove(frag)
+                    .commitNowAllowingStateLoss()
+            }
+        } catch (_: Exception) {}
+
+        try {
+            customFlutterEngineId?.let { FlutterEngineCache.getInstance().remove(it) }
+            customFlutterEngine?.destroy()
+        } catch (_: Exception) {}
+        customFlutterEngine = null
+        customFlutterEngineId = null
+
+        try {
+            unregisterReceiver(endedCallkitIncomingBroadcastReceiver)
+        } catch (_: Exception) {}
         super.onDestroy()
     }
 

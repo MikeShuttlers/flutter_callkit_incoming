@@ -21,6 +21,8 @@ class AndroidParams {
     this.isShowFullLockedScreen,
     this.isImportant,
     this.isBot,
+    this.incomingCallCustomWidgetRoute,
+    this.incomingCallCustomWidgetData,
   });
 
   /// Using custom notifications.
@@ -69,6 +71,16 @@ class AndroidParams {
   /// Used primarily to identify automated tooling.
   /// https://developer.android.com/reference/androidx/core/app/Person#isBot()
   final bool? isBot;
+
+  /// Optional Flutter route used to render a custom section in the full-screen incoming call UI.
+  ///
+  /// The route should render a transparent widget that fits in the caller-info area.
+  /// Android only.
+  final String? incomingCallCustomWidgetRoute;
+
+  /// Optional payload forwarded to the route above under `custom` in `callkitData`.
+  /// Android only.
+  final Map<String, dynamic>? incomingCallCustomWidgetData;
 
   factory AndroidParams.fromJson(Map<String, dynamic> json) =>
       _$AndroidParamsFromJson(json);

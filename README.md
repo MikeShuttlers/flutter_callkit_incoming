@@ -137,6 +137,11 @@ CallKitParams callKitParams = CallKitParams(
     backgroundUrl: 'https://i.pravatar.cc/500',
     actionColor: '#4CAF50',
     textColor: '#ffffff',
+    incomingCallCustomWidgetRoute: '/incoming_call_header',
+    incomingCallCustomWidgetData: {
+      'title': 'VIP Customer',
+      'subtitle': 'Priority support line',
+    },
     incomingCallNotificationChannelName: "Incoming Call",
     missedCallNotificationChannelName: "Missed Call",
     isShowCallID: false
@@ -187,6 +192,25 @@ await FlutterCallkitIncoming.canUseFullScreenIntent();
 // Request full intent permission
 await FlutterCallkitIncoming.requestFullIntentPermission();
 ```
+
+#### Custom Flutter Section On Full-Screen Incoming UI (Android)
+
+You can replace the avatar/name/number block in the full-screen incoming call page by passing a Flutter route.
+
+```dart
+android: const AndroidParams(
+  incomingCallCustomWidgetRoute: '/incoming_call_header',
+  incomingCallCustomWidgetData: {
+    'title': 'Design Review',
+    'subtitle': 'Tap accept to join',
+  },
+)
+```
+
+Notes:
+- This only replaces the top caller-info section on Android full-screen incoming UI.
+- Accept/Decline actions and the rest of the native call page remain unchanged.
+- The plugin appends a `callkitData` query parameter to your route. Your widget can parse it and use `custom` payload values.
 
 #### Show Missed Call Notification
 ```dart
@@ -634,6 +658,8 @@ class MainActivity: FlutterActivity(){
 | **`missedCallNotificationChannelName`** | Notification channel name of missed call | `Missed call` |
 | **`isShowCallID`** | Show call id app inside full screen/notification | `false` |
 | **`isShowFullLockedScreen`** | Show full screen on Locked Screen (please make sure call `requestFullIntentPermission` for Android 14+) | `true` |
+| **`incomingCallCustomWidgetRoute`** | Flutter route used to render custom content in the full-screen incoming caller-info section | _None_ |
+| **`incomingCallCustomWidgetData`** | Payload map forwarded to the route (inside `callkitData.custom`) | _None_ |
 
 ### iOS
 

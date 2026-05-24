@@ -195,15 +195,8 @@ class CallkitNotificationManager(
         notificationBuilder?.setContentIntent(getActivityPendingIntent(notificationId, data))
         notificationBuilder?.setDeleteIntent(getTimeOutPendingIntent(notificationId, data))
         val typeCall = data.getInt(CallkitConstants.EXTRA_CALLKIT_TYPE, -1)
-        var smallIcon = context.applicationInfo.icon
-        if (typeCall > 0) {
-            smallIcon = R.drawable.ic_video
-        } else {
-            if (smallIcon >= 0) {
-                smallIcon = R.drawable.ic_accept
-            }
-        }
-        notificationBuilder?.setSmallIcon(smallIcon)
+        // Keep incoming notification icon consistent with the updated action icon set.
+        notificationBuilder?.setSmallIcon(R.drawable.ic_accept)
         val actionColor = data.getString(CallkitConstants.EXTRA_CALLKIT_ACTION_COLOR, "#4CAF50")
         try {
             notificationBuilder?.color = Color.parseColor(actionColor)
@@ -216,75 +209,28 @@ class CallkitNotificationManager(
         val isCustomSmallExNotification =
             data.getBoolean(CallkitConstants.EXTRA_CALLKIT_IS_CUSTOM_SMALL_EX_NOTIFICATION, false)
         if (isCustomNotification) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            notificationViews =
+                RemoteViews(context.packageName, R.layout.layout_custom_notification)
+            initInComingNotificationViews(notificationId, notificationViews!!, data)
 
-                val caller = data.getString(CallkitConstants.EXTRA_CALLKIT_NAME_CALLER, "")
-                val person = Person.Builder().setName(caller).setImportant(
-                    data.getBoolean(CallkitConstants.EXTRA_CALLKIT_IS_IMPORTANT, true)
-                ).setBot(data.getBoolean(CallkitConstants.EXTRA_CALLKIT_IS_BOT, false)).build()
-                notificationBuilder?.setStyle(
-                    NotificationCompat.CallStyle.forIncomingCall(
-                        person,
-                        getDeclinePendingIntent(notificationId, data),
-                        getAcceptPendingIntent(notificationId, data),
-                    ).setIsVideo(typeCall > 0)
+            if ((Build.MANUFACTURER.equals(
+                    "Samsung", ignoreCase = true
+                ) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) || isCustomSmallExNotification
+            ) {
+                notificationSmallViews = RemoteViews(
+                    context.packageName, R.layout.layout_custom_small_ex_notification
                 )
-                val isShowCallID =
-                    data.getBoolean(CallkitConstants.EXTRA_CALLKIT_IS_SHOW_CALL_ID, false)
-                if (isShowCallID) {
-                    notificationBuilder?.setContentText(
-                        data.getString(
-                            CallkitConstants.EXTRA_CALLKIT_HANDLE, ""
-                        )
-                    )
-                }
-                var avatarUrl = data.getString(CallkitConstants.EXTRA_CALLKIT_AVATAR, "")
-                if (!avatarUrl.isNullOrEmpty()) {
-                    if (!avatarUrl.startsWith("http://", true) && !avatarUrl.startsWith(
-                            "https://",
-                            true
-                        )
-                    ) {
-                        avatarUrl =
-                            String.format("file:///android_asset/flutter_assets/%s", avatarUrl)
-                    }
-                    val headers =
-                        data.getSerializable(CallkitConstants.EXTRA_CALLKIT_HEADERS) as HashMap<String, Any?>
-                    if (targetInComingAvatarCustom == null) targetInComingAvatarCustom =
-                        createInComingAvatarTargetCustom(notificationId, true)
-
-                    ImageLoaderProvider.loadImage(
-                        context,
-                        avatarUrl,
-                        headers,
-                        targetInComingAvatarCustom
-                    )
-
-                }
+                initInComingNotificationViews(notificationId, notificationSmallViews!!, data)
             } else {
-                notificationViews =
-                    RemoteViews(context.packageName, R.layout.layout_custom_notification)
-                initInComingNotificationViews(notificationId, notificationViews!!, data)
-
-                if ((Build.MANUFACTURER.equals(
-                        "Samsung", ignoreCase = true
-                    ) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) || isCustomSmallExNotification
-                ) {
-                    notificationSmallViews = RemoteViews(
-                        context.packageName, R.layout.layout_custom_small_ex_notification
-                    )
-                    initInComingNotificationViews(notificationId, notificationSmallViews!!, data)
-                } else {
-                    notificationSmallViews =
-                        RemoteViews(context.packageName, R.layout.layout_custom_small_notification)
-                    initInComingNotificationViews(notificationId, notificationSmallViews!!, data)
-                }
-
-                notificationBuilder?.setStyle(NotificationCompat.DecoratedCustomViewStyle())
-                notificationBuilder?.setCustomContentView(notificationSmallViews)
-                notificationBuilder?.setCustomBigContentView(notificationViews)
-                notificationBuilder?.setCustomHeadsUpContentView(notificationSmallViews)
+                notificationSmallViews =
+                    RemoteViews(context.packageName, R.layout.layout_custom_small_notification)
+                initInComingNotificationViews(notificationId, notificationSmallViews!!, data)
             }
+
+            notificationBuilder?.setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            notificationBuilder?.setCustomContentView(notificationSmallViews)
+            notificationBuilder?.setCustomBigContentView(notificationViews)
+            notificationBuilder?.setCustomHeadsUpContentView(notificationSmallViews)
         } else {
             notificationBuilder?.setContentText(
                 data.getString(
@@ -615,15 +561,8 @@ class CallkitNotificationManager(
         notificationOngoingBuilder?.setSound(null)
 
         val typeCall = data.getInt(CallkitConstants.EXTRA_CALLKIT_TYPE, -1)
-        var smallIcon = context.applicationInfo.icon
-        if (typeCall > 0) {
-            smallIcon = R.drawable.ic_video
-        } else {
-            if (smallIcon >= 0) {
-                smallIcon = R.drawable.ic_accept
-            }
-        }
-        notificationOngoingBuilder?.setSmallIcon(smallIcon)
+        // Keep ongoing call notification icon consistent with incoming call notification.
+        notificationOngoingBuilder?.setSmallIcon(R.drawable.ic_accept)
 
         val isCustomNotification =
             data.getBoolean(CallkitConstants.EXTRA_CALLKIT_IS_CUSTOM_NOTIFICATION, false)

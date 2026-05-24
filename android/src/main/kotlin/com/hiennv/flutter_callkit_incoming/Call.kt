@@ -141,6 +141,12 @@ data class Data(val args: Map<String, Any?>) {
     @JsonProperty("isBot")
     var isBot: Boolean = false
 
+    @JsonProperty("incomingCallCustomWidgetRoute")
+    var incomingCallCustomWidgetRoute: String? = null
+
+    @JsonProperty("incomingCallCustomWidgetData")
+    var incomingCallCustomWidgetData: HashMap<String, Any?> = HashMap()
+
     init {
         var android: Map<String, Any?>? = args["android"] as? HashMap<String, Any?>?
         android = android ?: args
@@ -160,6 +166,10 @@ data class Data(val args: Map<String, Any?>) {
         isShowFullLockedScreen = android["isShowFullLockedScreen"] as? Boolean ?: true
         isImportant = android["isImportant"] as? Boolean ?: false
         isBot = android["isBot"] as? Boolean ?: false
+        incomingCallCustomWidgetRoute =
+            android["incomingCallCustomWidgetRoute"] as? String
+        incomingCallCustomWidgetData =
+            (android["incomingCallCustomWidgetData"] as? HashMap<String, Any?>) ?: HashMap()
 
 
         val missedNotification: Map<String, Any?>? =
@@ -325,6 +335,14 @@ data class Data(val args: Map<String, Any?>) {
             CallkitConstants.EXTRA_CALLKIT_IS_BOT,
             isBot,
         )
+        bundle.putString(
+            CallkitConstants.EXTRA_CALLKIT_INCOMING_CUSTOM_WIDGET_ROUTE,
+            incomingCallCustomWidgetRoute
+        )
+        bundle.putSerializable(
+            CallkitConstants.EXTRA_CALLKIT_INCOMING_CUSTOM_WIDGET_DATA,
+            incomingCallCustomWidgetData
+        )
         return bundle
     }
 
@@ -432,6 +450,14 @@ data class Data(val args: Map<String, Any?>) {
                 CallkitConstants.EXTRA_CALLKIT_IS_SHOW_FULL_LOCKED_SCREEN,
                 true
             )
+            data.incomingCallCustomWidgetRoute = bundle.getString(
+                CallkitConstants.EXTRA_CALLKIT_INCOMING_CUSTOM_WIDGET_ROUTE,
+                ""
+            )
+            data.incomingCallCustomWidgetData =
+                (bundle.getSerializable(
+                    CallkitConstants.EXTRA_CALLKIT_INCOMING_CUSTOM_WIDGET_DATA
+                ) as? HashMap<String, Any?>) ?: HashMap()
             return data
         }
     }
