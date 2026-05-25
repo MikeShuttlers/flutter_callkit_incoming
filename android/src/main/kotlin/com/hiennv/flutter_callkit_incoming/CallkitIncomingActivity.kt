@@ -8,12 +8,15 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.graphics.Color
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.text.TextUtils
+import android.util.Log
 import android.view.View
+import android.view.ViewGroup.MarginLayoutParams
 import android.view.Window
 import android.view.WindowManager
 import android.view.animation.AnimationUtils
@@ -24,26 +27,19 @@ import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import com.hiennv.flutter_callkit_incoming.widgets.RippleRelativeLayout
 import de.hdodenhof.circleimageview.CircleImageView
-import kotlin.math.abs
-import android.view.ViewGroup.MarginLayoutParams
-import android.os.PowerManager
-import android.text.TextUtils
-import android.util.Log
-import io.flutter.FlutterInjector
 import io.flutter.embedding.android.FlutterFragment
 import io.flutter.embedding.android.RenderMode
 import io.flutter.embedding.android.TransparencyMode
-import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.FlutterEngineCache
-import io.flutter.embedding.engine.dart.DartExecutor
-import org.json.JSONObject
+import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener
+import kotlin.math.abs
 
-class CallkitIncomingActivity : FragmentActivity() {
+class CallkitIncomingActivity : FragmentActivity(), FlutterUiDisplayListener {
 
     companion object {
 
         private const val ACTION_ENDED_CALL_INCOMING =
             "com.hiennv.flutter_callkit_incoming.ACTION_ENDED_CALL_INCOMING"
+        private const val CUSTOM_FLUTTER_FRAGMENT_TAG = "callkit_custom_flutter_section"
 
         fun getIntent(context: Context, data: Bundle) =
             Intent(CallkitConstants.ACTION_CALL_INCOMING).apply {
@@ -90,8 +86,6 @@ class CallkitIncomingActivity : FragmentActivity() {
 
     private lateinit var ivDeclineCall: ImageView
     private lateinit var tvDecline: TextView
-
-    private var customFlutterEngine: FlutterEngine? = null
     private var customFlutterEngineId: String? = null
 
     @Suppress("DEPRECATION")
@@ -275,74 +269,81 @@ class CallkitIncomingActivity : FragmentActivity() {
             ""
         ).orEmpty()
         if (route.isEmpty()) {
+            removeCustomFlutterFragment()
+            customFlutterEngineId = null
+            flCustomFlutterSection.alpha = 0f
             flCustomFlutterSection.visibility = View.GONE
             return
         }
 
         try {
-            val appContext = applicationContext
-            val flutterLoader = FlutterInjector.instance().flutterLoader()
-            flutterLoader.startInitialization(appContext)
-            flutterLoader.ensureInitializationComplete(appContext, null)
+            val engineId = CallkitCustomFlutterEngineManager.prewarm(this, data)
+                ?: throw IllegalStateException("Custom Flutter header engine did not prewarm")
+            customFlutterEngineId = engineId
 
-            val payload = buildCustomFlutterPayload(data)
-            val encodedPayload = Uri.encode(JSONObject(payload as Map<*, *>).toString())
-            val routeWithPayload =
-                if (route.contains("?")) "$route&callkitData=$encodedPayload" else "$route?callkitData=$encodedPayload"
-
-            val engine = FlutterEngine(appContext)
-            engine.navigationChannel.setInitialRoute(routeWithPayload)
-            engine.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault())
-
-            val callId = data?.getString(
-                CallkitConstants.EXTRA_CALLKIT_ID,
-                System.currentTimeMillis().toString()
-            ) ?: System.currentTimeMillis().toString()
-            val engineId = "callkit_fullscreen_$callId"
-            // Remove any stale cached engine from a previous call with the same ID
-            FlutterEngineCache.getInstance().remove(engineId)
-            FlutterEngineCache.getInstance().put(engineId, engine)
+            prepareCustomFlutterSection()
 
             val flutterFragment = FlutterFragment.withCachedEngine(engineId)
                 .renderMode(RenderMode.texture)
                 .transparencyMode(TransparencyMode.transparent)
-                .shouldAttachEngineToActivity(false)
+                .shouldAttachEngineToActivity(true)
                 .build<FlutterFragment>()
 
             supportFragmentManager.beginTransaction()
-                .replace(R.id.flCustomFlutterSection, flutterFragment, "callkit_custom_flutter_section")
+                .replace(R.id.flCustomFlutterSection, flutterFragment, CUSTOM_FLUTTER_FRAGMENT_TAG)
                 .commitNowAllowingStateLoss()
 
             val attachedFragment =
-                supportFragmentManager.findFragmentByTag("callkit_custom_flutter_section")
+                supportFragmentManager.findFragmentByTag(CUSTOM_FLUTTER_FRAGMENT_TAG)
             if (attachedFragment == null) {
                 throw IllegalStateException("Custom Flutter header fragment did not attach")
             }
 
-            customFlutterEngine = engine
-            customFlutterEngineId = engineId
-
-            ivLogo.visibility = View.GONE
-            ivAvatar.visibility = View.GONE
-            llCallerInfo.visibility = View.GONE
-            flCustomFlutterSection.visibility = View.VISIBLE
+            flCustomFlutterSection.post {
+                CallkitCustomFlutterEngineManager.refreshRoute(engineId, data)
+            }
         } catch (error: Exception) {
             Log.e("CallkitIncomingActivity", "Unable to render custom Flutter section", error)
-            flCustomFlutterSection.visibility = View.GONE
+            removeCustomFlutterFragment()
+            // Custom-only mode: keep native caller block hidden even if Flutter fails to attach.
+            flCustomFlutterSection.visibility = View.VISIBLE
+            flCustomFlutterSection.alpha = 1f
         }
     }
 
-    private fun buildCustomFlutterPayload(data: Bundle?): HashMap<String, Any?> {
-        val payload = HashMap<String, Any?>()
-        payload["id"] = data?.getString(CallkitConstants.EXTRA_CALLKIT_ID, "")
-        payload["nameCaller"] = data?.getString(CallkitConstants.EXTRA_CALLKIT_NAME_CALLER, "")
-        payload["handle"] = data?.getString(CallkitConstants.EXTRA_CALLKIT_HANDLE, "")
-        payload["type"] = data?.getInt(CallkitConstants.EXTRA_CALLKIT_TYPE, 0)
-        payload["avatar"] = data?.getString(CallkitConstants.EXTRA_CALLKIT_AVATAR, "")
-        payload["extra"] = data?.getSerializable(CallkitConstants.EXTRA_CALLKIT_EXTRA)
-        val customData = data?.getSerializable(CallkitConstants.EXTRA_CALLKIT_INCOMING_CUSTOM_WIDGET_DATA)
-        payload["custom"] = if (customData is HashMap<*, *>) customData else HashMap<String, Any?>()
-        return payload
+    override fun onFlutterUiDisplayed() {
+        flCustomFlutterSection.post {
+            flCustomFlutterSection.visibility = View.VISIBLE
+            flCustomFlutterSection.alpha = 1f
+            flCustomFlutterSection.bringToFront()
+            flCustomFlutterSection.requestLayout()
+            flCustomFlutterSection.invalidate()
+        }
+    }
+
+    override fun onFlutterUiNoLongerDisplayed() {}
+
+    private fun prepareCustomFlutterSection() {
+        llBackgroundAnimation.stopRippleAnimation()
+        ivLogo.visibility = View.GONE
+        ivAvatar.visibility = View.GONE
+        llCallerInfo.visibility = View.GONE
+        flCustomFlutterSection.visibility = View.VISIBLE
+        flCustomFlutterSection.alpha = 1f
+        flCustomFlutterSection.bringToFront()
+        flCustomFlutterSection.requestLayout()
+        flCustomFlutterSection.invalidate()
+    }
+
+    private fun removeCustomFlutterFragment() {
+        try {
+            val frag = supportFragmentManager.findFragmentByTag(CUSTOM_FLUTTER_FRAGMENT_TAG)
+            if (frag != null) {
+                supportFragmentManager.beginTransaction()
+                    .remove(frag)
+                    .commitNowAllowingStateLoss()
+            }
+        } catch (_: Exception) {}
     }
 
     private fun finishTimeout(data: Bundle?, duration: Long) {
@@ -451,22 +452,18 @@ class CallkitIncomingActivity : FragmentActivity() {
         }
     }
 
-    override fun onDestroy() {
-        // Detach Flutter fragment before destroying engine to avoid JNI crash.
-        try {
-            val frag = supportFragmentManager.findFragmentByTag("callkit_custom_flutter_section")
-            if (frag != null) {
-                supportFragmentManager.beginTransaction()
-                    .remove(frag)
-                    .commitNowAllowingStateLoss()
-            }
-        } catch (_: Exception) {}
+    override fun onPostResume() {
+        super.onPostResume()
+        val flutterFragment =
+            supportFragmentManager.findFragmentByTag(CUSTOM_FLUTTER_FRAGMENT_TAG)
+                as? FlutterFragment
+        flutterFragment?.onPostResume()
+    }
 
-        try {
-            customFlutterEngineId?.let { FlutterEngineCache.getInstance().remove(it) }
-            customFlutterEngine?.destroy()
-        } catch (_: Exception) {}
-        customFlutterEngine = null
+    override fun onDestroy() {
+        // Detach Flutter fragment so the fragment-owned engine is cleaned up safely.
+        removeCustomFlutterFragment()
+        CallkitCustomFlutterEngineManager.destroy(customFlutterEngineId)
         customFlutterEngineId = null
 
         try {

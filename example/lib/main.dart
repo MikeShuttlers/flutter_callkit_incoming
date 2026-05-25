@@ -71,6 +71,15 @@ Future<void> showCallkitIncoming(String uuid) async {
   await FlutterCallkitIncoming.showCallkitIncoming(params);
 }
 
+Route<dynamic> _incomingCallHeaderRoute(
+    RouteSettings settings, Uri fallbackUri) {
+  final routeUri = Uri.tryParse(settings.name ?? '');
+  return MaterialPageRoute<dynamic>(
+    builder: (_) => IncomingCallHeader(uri: routeUri ?? fallbackUri),
+    settings: settings,
+  );
+}
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -82,8 +91,14 @@ void main() {
     runApp(MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
-      home: IncomingCallHeader(uri: uri),
+      onGenerateInitialRoutes: (initialRoute) => [
+        _incomingCallHeaderRoute(RouteSettings(name: initialRoute), uri),
+      ],
+      onGenerateRoute: (settings) => _incomingCallHeaderRoute(settings, uri),
     ));
+    WidgetsBinding.instance
+      ..scheduleWarmUpFrame()
+      ..scheduleFrame();
     return;
   }
 

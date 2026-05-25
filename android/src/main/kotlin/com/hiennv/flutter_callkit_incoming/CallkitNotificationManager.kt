@@ -931,6 +931,7 @@ class CallkitNotificationManager(
 
     @SuppressLint("MissingPermission")
     fun showIncomingNotification(data: Bundle) {
+        CallkitCustomFlutterEngineManager.prewarm(context, data)
         val callkitNotification = getIncomingNotification(data)
         if (incomingChannelEnabled()) {
             callkitSoundPlayerManager?.play(data)
@@ -1078,5 +1079,4 @@ class CallkitNotificationManager(
 }
 
 data class CallkitNotification(val id: Int, val notification: Notification)
-
 
