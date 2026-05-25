@@ -135,6 +135,9 @@ class RippleRelativeLayout : RelativeLayout {
             animatorSet!!.end()
             isRippleAnimationRunning = false
         }
+        for (rippleView in rippleViewList) {
+            rippleView.visibility = INVISIBLE
+        }
     }
 
     companion object {
