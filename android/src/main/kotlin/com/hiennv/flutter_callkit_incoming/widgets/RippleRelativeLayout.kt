@@ -67,6 +67,8 @@ class RippleRelativeLayout : RelativeLayout {
             typedArray.getInt(R.styleable.ripple_relativeLayout_ripple_amount, DEFAULT_RIPPLE_COUNT)
         rippleScale =
             typedArray.getFloat(R.styleable.ripple_relativeLayout_ripple_scale, DEFAULT_SCALE)
+        val rippleAutoStart =
+            typedArray.getBoolean(R.styleable.ripple_relativeLayout_ripple_auto_start, true)
         typedArray.recycle()
 
         rippleDelay = rippleDurationTime / rippleAmount
@@ -106,7 +108,9 @@ class RippleRelativeLayout : RelativeLayout {
             animatorList!!.add(alphaAnimator)
         }
         animatorSet!!.playTogether(animatorList)
-        startRippleAnimation()
+        if (rippleAutoStart) {
+            startRippleAnimation()
+        }
     }
 
     private inner class RippleView(context: Context?) : View(context) {

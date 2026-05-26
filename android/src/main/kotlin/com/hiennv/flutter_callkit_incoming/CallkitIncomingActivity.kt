@@ -271,6 +271,7 @@ class CallkitIncomingActivity : FragmentActivity(), FlutterUiDisplayListener {
         if (route.isEmpty()) {
             removeCustomFlutterFragment()
             customFlutterEngineId = null
+            llBackgroundAnimation.startRippleAnimation()
             flCustomFlutterSection.alpha = 0f
             flCustomFlutterSection.visibility = View.GONE
             return
@@ -365,7 +366,6 @@ class CallkitIncomingActivity : FragmentActivity(), FlutterUiDisplayListener {
         llBackgroundAnimation = findViewById(R.id.llBackgroundAnimation)
         llBackgroundAnimation.layoutParams.height =
             Utils.getScreenWidth() + Utils.getStatusBarHeight(this@CallkitIncomingActivity)
-        llBackgroundAnimation.startRippleAnimation()
 
         tvNameCaller = findViewById(R.id.tvNameCaller)
         tvNumber = findViewById(R.id.tvNumber)

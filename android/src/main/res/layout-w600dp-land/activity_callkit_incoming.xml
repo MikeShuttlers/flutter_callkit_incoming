@@ -28,7 +28,8 @@
             android:layout_height="0dp"
             android:layout_marginTop="@dimen/base_margin_revert_x5"
             android:layout_weight="1"
-            android:fitsSystemWindows="false">
+            android:fitsSystemWindows="false"
+            app:ripple_auto_start="false">
 
             <ImageView
                 android:id="@+id/ivLogo"

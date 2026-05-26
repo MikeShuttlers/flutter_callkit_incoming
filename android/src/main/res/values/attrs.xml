@@ -7,5 +7,6 @@
         <attr name="ripple_duration" format="integer"/>
         <attr name="ripple_amount" format="integer"/>
         <attr name="ripple_scale" format="float"/>
+        <attr name="ripple_auto_start" format="boolean"/>
     </declare-styleable>
 </resources>
